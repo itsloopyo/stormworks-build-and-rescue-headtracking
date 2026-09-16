@@ -1,0 +1,31 @@
+.claude/
+.lab/
+.pixi/
+.vs/
+.vscode/
+.idea/
+build/
+bin/
+obj/
+release/
+*.user
+*.suo
+*.log
+
+# Our generated/staged artifacts
+.headtracking-state.json
+StormworksHeadTracking.log
+
+# Mod loader / MCP scaffolding
+AGENTS.md
+CLAUDE.md
+NEXUS_MODS.md
+scratch/
+libs/
+dist/
+mcp.json
+.mcp.json
+
+# Python bytecode from the helper scripts
+__pycache__/
+*.pyc

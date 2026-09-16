@@ -1,0 +1,66 @@
+[workspace]
+name = "stormworks-head-tracking"
+version = "0.0.0"
+description = "Head tracking mod for Stormworks: Build and Rescue (opengl32 proxy shim) using the CameraUnlock shared library"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+cmake = ">=3.28"
+
+[tasks]
+sync = "git submodule update --init --remote cameraunlock-core"
+
+# Configure CMake (x64, MSVC). No -G: let CMake auto-detect the installed
+# Visual Studio generator. Pinning "Visual Studio 17 2022" broke on CI once
+# the windows runner image moved to VS 2026 (VS 17 absent); auto-detect picks
+# whatever VS the machine has.
+setup = { cmd = """
+    powershell -Command "if (-not (Test-Path 'build')) { cmake -B build -A x64 } else { Write-Host 'Build directory exists, skipping setup' -ForegroundColor Yellow }"
+""" }
+
+build = { cmd = "cmake --build build --config Release", depends-on = ["setup"] }
+build-debug = { cmd = "cmake --build build --config Debug", depends-on = ["setup"] }
+
+# Characterization tests for the camera uniform maths and the config file. The
+# build task already compiles the test target, so this only has to run it.
+test = { cmd = "build/tests/Release/StormworksHeadTrackingTests.exe", depends-on = ["build"] }
+
+install = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1", depends-on = ["build"] }
+uninstall = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/uninstall.ps1" }
+
+# Shim-only mod: the mod IS the opengl32.dll proxy, built from source. No
+# mod loader is vendored (opengl32_real.dll is captured from the user's own
+# System32 at install time, not shipped). Kept as a no-op so the
+# launcher/dev workflow can call it uniformly across the fleet.
+update-deps = { cmd = """
+    powershell -Command "Write-Host 'No vendored dependencies to update (shim-only mod).' -ForegroundColor Yellow"
+""" }
+
+# Through test, so CI and release never package a build whose tests fail.
+package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["test"] }
+
+# Compare the installed stormworks64.exe's PE fingerprint against the build
+# profiles in src/StormworksHeadTracking/builds/. First thing to run when the
+# log says the game build is unknown, and after a Steam patch.
+check-fingerprint = "powershell -ExecutionPolicy Bypass -File scripts/check-fingerprint.ps1"
+
+# Validate a built installer ZIP is a coherent manifest-mode package
+# (delivery_mode == "manifest" and every declared source exists in the zip).
+# No args: validates this repo's own release/*-installer.zip - run after
+# packaging.
+validate-manifest = "node cameraunlock-core/scripts/validate-manifest.mjs"
+
+# Check THIRD-PARTY-NOTICES.md actually reproduces the licence of everything
+# compiled into the binary. No args: validates this repo.
+validate-notices = "node cameraunlock-core/scripts/validate-notices.mjs"
+
+release = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/release.ps1" }
+release-nightly = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/release-nightly.ps1" }
+
+clean = { cmd = """
+    powershell -Command "if (Test-Path 'build') { Remove-Item 'build' -Recurse -Force }; Write-Host 'Build artifacts cleaned' -ForegroundColor Green"
+""" }
+clean-all = { cmd = """
+    powershell -Command "if (Test-Path 'build') { Remove-Item 'build' -Recurse -Force }; if (Test-Path 'release') { Remove-Item 'release' -Recurse -Force }; Write-Host 'All build artifacts cleaned' -ForegroundColor Green"
+""" }

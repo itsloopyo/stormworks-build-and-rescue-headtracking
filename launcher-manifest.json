@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "mod_info": {
+    "name": "StormworksHeadTracking",
+    "version": "0.0.0",
+    "game_id": "stormworks"
+  },
+  "strategy": "Shim",
+  "delivery_mode": "manifest",
+
+  "files": [
+    { "source": "plugins/opengl32.dll", "target": "opengl32.dll", "backup": true }
+  ],
+
+  "runtime_requirements": [
+    {
+      "id": "opengl32-proxy-original",
+      "type": "system-file-copy",
+      "source": "%WINDIR%/System32/opengl32.dll",
+      "target": "opengl32_real.dll",
+      "required": true,
+      "reason": "The mod ships as an opengl32.dll proxy planted next to stormworks64.exe. The real Windows opengl32.dll must be captured alongside it as opengl32_real.dll so the proxy can forward all 365 non-intercepted GL exports to it; without it the game gets no OpenGL and cannot render. The file is not redistributable, so it is captured from the user's own System32 at install time."
+    }
+  ],
+
+  "dependencies": []
+}
