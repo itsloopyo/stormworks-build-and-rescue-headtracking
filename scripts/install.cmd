@@ -27,6 +27,7 @@ set "MOD_INTERNAL_NAME=StormworksHeadTracking"
 set "MOD_VERSION=0.0.0"
 set "STATE_FILE=.headtracking-state.json"
 set "FRAMEWORK_TYPE=None"
+set "SHIM_MARKER=StormworksHeadTracking attached"
 :: The system DLL the shim replaces, the name its forwards point at, and the
 :: game executable's architecture (x64 or x86), which picks the system
 :: directory the copy is taken from.
