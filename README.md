@@ -4,8 +4,6 @@
 
 An unofficial head tracking mod for Stormworks: Build and Rescue that moves the view with your head while your mouse or controller keeps aiming, driven by a webcam, phone, or any OpenTrack compatible tracker, with no VR headset required.
 
-**Status: work in progress, not yet released.** Watch this repo or join the Discord for the release announcement.
-
 ## Features
 
 - **Decoupled look and aim** - head tracking moves the view; aim stays on your mouse
@@ -22,7 +20,7 @@ An unofficial head tracking mod for Stormworks: Build and Rescue that moves the 
 
 ### Lopari
 
-Once this mod is available in Lopari, download [Lopari](https://lopari.app), choose **Stormworks: Build and Rescue**, and click
+Download [Lopari](https://lopari.app), choose **Stormworks: Build and Rescue**, and click
 **Play with head tracking**.
 
 ### Standalone Installer
@@ -143,8 +141,7 @@ the `WorldSpaceYaw` setting on every launch.
 ## Configuration
 
 `StormworksHeadTracking.ini` is written next to `stormworks64.exe` on first
-launch. An ini from an older version that lacks a key gets that key's default.
-Changes take effect the next time the game starts.
+launch. Changes take effect the next time the game starts.
 
 ```ini
 [Tracking]
@@ -235,7 +232,7 @@ fresh on every launch, and the session before is kept as
 
 **Crosshair is off target while leaning:**
 
-- The crosshair follows head rotation, but leaning moves the view without moving the crosshair yet. Center your lean when precision matters.
+- The crosshair follows head rotation. Leaning moves the view without moving the crosshair, so center your lean when precision matters.
 
 ## Updating
 
