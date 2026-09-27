@@ -29,7 +29,7 @@
     "path": "CameraUnlock.ini",
     "anchor": "game_root",
     "legacy_source": "StormworksHeadTracking.ini",
-    "canonical_since": "0.1.0",
+    "canonical_since": "0.0.1",
     "per_game": {}
   }
 }
