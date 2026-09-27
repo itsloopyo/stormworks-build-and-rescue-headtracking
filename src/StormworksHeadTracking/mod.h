@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
+#include <memory>
 #include <string>
 
 #include "cameraunlock/input/hotkey_poller.h"
@@ -17,10 +19,10 @@ namespace stormworks_ht {
 //
 // Threading: OnFrameTick()/IsInjecting()/BuildViewDelta() run on the render
 // (GL) thread. ToggleEnabled()/CycleMode()/ToggleYawMode() fire from the hotkey
-// poller thread and write atomics only; the mode change itself is applied at
-// the top of the next frame, because HeadTrackingSession::SetMode resets the
-// position processor's plain-float smoothing state and the render thread is
-// inside that same state for most of a frame.
+// poller thread, write atomics and save the config there; the mode change itself
+// is applied at the top of the next frame, because HeadTrackingSession::SetMode
+// resets the position processor's plain-float smoothing state and the render
+// thread is inside that same state for most of a frame.
 class HeadTrackingMod {
 public:
     HeadTrackingMod() : m_session(m_receiver) {}
@@ -48,16 +50,22 @@ public:
     void ToggleYawMode();
 
 private:
+    void LoadConfig(const std::wstring& exe_dir);
     void ConfigurePipeline();
     void StartReceiver();
     void RegisterHotkeys();
+
+    // Writes a change the caller has already applied to CameraUnlock.ini, and logs
+    // what the save reports.
+    void SaveConfig(const char* what, std::function<void(Config&)> change);
 
     float ComputeDeltaTime();
 
     // True while the newest packet is younger than Config::data_freshness_ms.
     bool IsPoseFresh() const;
 
-    void ApplyPendingModeCycles();
+    // Applies the mode the hotkey thread last asked for, on the render thread.
+    void ApplyDesiredMode();
 
     void LogHeartbeat();
 
@@ -66,9 +74,15 @@ private:
     cameraunlock::input::HotkeyPoller m_hotkeys;
 
     Config m_config;
+    // Built on the init thread before anything reads the config. Only the hotkey
+    // poller's thread calls Save after startup.
+    std::unique_ptr<cameraunlock::config::ConfigOwner<Config>> m_owner;
     std::atomic<bool> m_enabled{true};
     std::atomic<bool> m_world_space_yaw{true};
-    std::atomic<int> m_pending_mode_cycles{0};
+    // cameraunlock::TrackingMode values. The hotkey thread computes the next mode
+    // from the applied one and stores it as desired; the render thread applies it.
+    std::atomic<int> m_desired_mode{0};
+    std::atomic<int> m_applied_mode{0};
 
     bool m_pose_fresh = false;
 

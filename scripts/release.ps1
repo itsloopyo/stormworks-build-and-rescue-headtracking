@@ -60,6 +60,10 @@ if (-not (Test-SemanticVersion -Version $newVersion)) {
 }
 Write-Host "Releasing v$newVersion (current v$currentVersion)" -ForegroundColor Cyan
 
+# Before anything is written or committed: a version below config.canonical_since would ship a
+# descriptor naming a version later than itself.
+Assert-ReleaseNotBelowCanonicalSince -RepoRoot $projectDir -Version $newVersion
+
 # 2. Preconditions - fail fast, never prompt. Checked before anything below
 #    commits, so a wrong branch or a dirty tree leaves no trace.
 $branch = (git -C $projectDir rev-parse --abbrev-ref HEAD).Trim()

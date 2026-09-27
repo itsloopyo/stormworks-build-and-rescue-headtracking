@@ -2,11 +2,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Run the characterization tests and the config differential test.
+    Run the characterization tests, the config tests and the config differential test.
 .DESCRIPTION
-    `pixi run build` compiles both test executables in the build tree. This checks
+    `pixi run build` compiles the test executables in the build tree. This checks
     that every file the differential test compiles still has the hash
-    tests/config_differential/provenance.txt records, then runs both.
+    tests/config_differential/provenance.txt records, runs each, then runs core's
+    canonical config lint over the committed file and every migrated one.
 
     Non-interactive: exits 0 when every test passes, non-zero on the first failure.
 .NOTES
@@ -31,9 +32,14 @@ foreach ($line in Get-Content $provenance) {
 }
 
 $testDir = Join-Path $projectRoot 'build/tests/Release'
-foreach ($exe in 'StormworksHeadTrackingTests.exe', 'StormworksConfigDifferentialTests.exe') {
+foreach ($exe in 'StormworksHeadTrackingTests.exe', 'StormworksConfigTests.exe', 'StormworksConfigDifferentialTests.exe') {
     & (Join-Path $testDir $exe)
     if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: $exe failed" -ForegroundColor Red; exit 1 }
 }
+
+# Core's canonical config lint over the committed file and every file the differential test
+# migrated, which it writes beside itself under migrated.
+& node (Join-Path $projectRoot 'tests/config_differential/lint-migrated.mjs') (Join-Path $testDir 'migrated')
+if ($LASTEXITCODE -ne 0) { Write-Host 'ERROR: the canonical config lint failed' -ForegroundColor Red; exit 1 }
 
 Write-Host 'All tests passed.' -ForegroundColor Green

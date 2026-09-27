@@ -1,10 +1,10 @@
 // Characterization tests for the parts of the mod that run without a game.
 //
 // The hooks only mean anything inside Stormworks. What is left over is the
-// matrix recognition and rewrite maths every camera uniform passes through,
-// and the config file the player edits. A sign or tolerance error in the maths
-// gives a picture that moves plausibly and wrongly, which gets through a play
-// test, so it is pinned here.
+// matrix recognition and rewrite maths every camera uniform passes through
+// (the config has its own tests in config_tests.cpp). A sign or tolerance error
+// in the maths gives a picture that moves plausibly and wrongly, which gets
+// through a play test, so it is pinned here.
 //
 // These lock CURRENT behaviour. If a change here fails, the question is whether
 // the behaviour was meant to change, not whether the test is inconvenient.
@@ -19,12 +19,8 @@
 
 #include <cmath>
 #include <cstdio>
-#include <fstream>
-#include <sstream>
-#include <string>
 
 #include "camera_uniforms.h"
-#include "config.h"
 #include "hud_reticle.h"
 #include "mat4.h"
 #include "view_rewrite.h"
@@ -442,256 +438,6 @@ void TestHudReticle() {
     CHECK(!ProjectCleanForward(p, h, ndc_x, ndc_y));
 }
 
-std::string TempDir() {
-    char buf[MAX_PATH];
-    GetTempPathA(MAX_PATH, buf);
-    std::string dir = std::string(buf) + "stormworks_ht_tests_" + std::to_string(GetCurrentProcessId());
-    CreateDirectoryA(dir.c_str(), nullptr);
-    return dir;
-}
-
-// Text mode: the writer opens its file in text mode, so on disk it is CRLF.
-std::string ReadFile(const std::string& path) {
-    std::ifstream in(path);
-    std::stringstream ss;
-    ss << in.rdbuf();
-    return ss.str();
-}
-
-void WriteFile(const std::string& path, const std::string& text) {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out << text;
-}
-
-// Byte for byte what a first run writes next to the game.
-const char* const kDefaultIni =
-    ";  Stormworks Head Tracking configuration\n"
-    ";  Decoupled look (head moves the view; mouse/keyboard still aim).\n"
-    "\n"
-    "[Tracking]\n"
-    "Port=4242\n"
-    "EnableOnStartup=1\n"
-    ";  Yaw mode: 1 = horizon-locked yaw (default), 0 = camera-local\n"
-    "WorldSpaceYaw=1\n"
-    "YawSensitivity=1\n"
-    "PitchSensitivity=1\n"
-    "RollSensitivity=1\n"
-    "InvertYaw=0\n"
-    "InvertPitch=0\n"
-    "InvertRoll=0\n"
-    ";  Smoothing 0.0 = lightest, 1.0 = heaviest. Covers rotation and position.\n"
-    ";  The value is picked per connection from the packet source address:\n"
-    ";  LocalSmoothing for a tracker sending to 127.0.0.1 on this PC,\n"
-    ";  RemoteSmoothing for anything else, including a tracker on this PC\n"
-    ";  that sends to this machine's LAN address instead of 127.0.0.1.\n"
-    "LocalSmoothing=0\n"
-    "RemoteSmoothing=0.15\n"
-    "\n"
-    "[Position]\n"
-    "PositionEnabled=1\n"
-    "PositionSensitivityX=1\n"
-    "PositionSensitivityY=1\n"
-    "PositionSensitivityZ=1\n"
-    "PositionLimitX=0.3\n"
-    ";  How far the view may move, in metres. Y is up and YDown is down.\n"
-    "PositionLimitY=0.2\n"
-    "PositionLimitYDown=0.2\n"
-    "PositionLimitZForward=0.4\n"
-    "PositionLimitZBack=0.1\n"
-    "InvertPositionX=0\n"
-    "InvertPositionY=0\n"
-    "InvertPositionZ=0\n"
-    "\n"
-    "[Hotkeys]\n"
-    ";  Windows virtual key codes. End=toggle PageUp=cycle mode PageDown=yaw mode.\n"
-    ";  Chord alternatives Ctrl+Shift+Y / G / H are always active too.\n"
-    "ToggleKey=0x23\n"
-    "CycleModeKey=0x21\n"
-    "YawModeKey=0x22\n"
-    "\n"
-    "[Advanced]\n"
-    "DataFreshnessMs=500\n";
-
-void CheckDefaults(const Config& c, const char* file, int line) {
-    const Config d;
-    Check(c.port == 4242 && d.port == 4242, "port", file, line);
-    Check(c.enable_on_startup && c.world_space_yaw, "startup flags", file, line);
-    Check(c.yaw_sensitivity == 1.0f && c.pitch_sensitivity == 1.0f && c.roll_sensitivity == 1.0f,
-          "sensitivities", file, line);
-    Check(!c.invert_yaw && !c.invert_pitch && !c.invert_roll, "inverts", file, line);
-    Check(c.local_smoothing == 0.0f && c.remote_smoothing == 0.15f, "smoothing", file, line);
-    Check(c.position_enabled, "position enabled", file, line);
-    Check(c.position_sensitivity_x == 1.0f && c.position_sensitivity_y == 1.0f &&
-              c.position_sensitivity_z == 1.0f,
-          "position sensitivities", file, line);
-    Check(c.position_limit_x == 0.30f && c.position_limit_y == 0.20f &&
-              c.position_limit_y_down == 0.20f && c.position_limit_z == 0.40f &&
-              c.position_limit_z_back == 0.10f,
-          "position limits", file, line);
-    Check(!c.invert_position_x && !c.invert_position_y && !c.invert_position_z, "position inverts",
-          file, line);
-    Check(c.toggle_key == 0x23 && c.cycle_mode_key == 0x21 && c.yaw_mode_key == 0x22, "hotkeys", file,
-          line);
-    Check(c.data_freshness_ms == 500, "freshness", file, line);
-}
-
-void TestConfig() {
-    const std::string dir = TempDir();
-    const std::string path = dir + "\\StormworksHeadTracking.ini";
-    DeleteFileA(path.c_str());
-
-    Config missing;
-    CHECK(!missing.Load(path));
-    CheckDefaults(missing, __FILE__, __LINE__);
-
-    CHECK(WriteDefaultConfig(path));
-    CHECK(ReadFile(path) == kDefaultIni);
-    CHECK(!WriteDefaultConfig(path));
-
-    Config loaded;
-    CHECK(loaded.Load(path));
-    CheckDefaults(loaded, __FILE__, __LINE__);
-
-    WriteFile(path, "[Tracking]\n"
-                    "Port=5000\n"
-                    "EnableOnStartup=0\n"
-                    "WorldSpaceYaw=0\n"
-                    "YawSensitivity=2.5\n"
-                    "InvertPitch=1\n"
-                    "LocalSmoothing=0.4\n"
-                    "RemoteSmoothing=0.6\n"
-                    "[Position]\n"
-                    "PositionEnabled=0\n"
-                    "PositionSensitivityZ=0.5\n"
-                    "PositionLimitX=0.25\n"
-                    "PositionLimitY=0.15\n"
-                    "PositionLimitZForward=0.35\n"
-                    "PositionLimitZBack=0.05\n"
-                    "InvertPositionY=1\n"
-                    "[Hotkeys]\n"
-                    "ToggleKey=0x70\n"
-                    "CycleModeKey=0x71\n"
-                    "YawModeKey=0x72\n"
-                    "[Advanced]\n"
-                    "DataFreshnessMs=750\n");
-    Config custom;
-    CHECK(custom.Load(path));
-    CHECK(custom.port == 5000);
-    CHECK(!custom.enable_on_startup);
-    CHECK(!custom.world_space_yaw);
-    CHECK(custom.yaw_sensitivity == 2.5f);
-    CHECK(custom.invert_pitch && !custom.invert_yaw);
-    CHECK(custom.local_smoothing == 0.4f);
-    CHECK(custom.remote_smoothing == 0.6f);
-    CHECK(!custom.position_enabled);
-    CHECK(custom.position_sensitivity_z == 0.5f);
-    CHECK(custom.position_limit_x == 0.25f);
-    CHECK(custom.position_limit_y == 0.15f);
-    CHECK(custom.position_limit_z == 0.35f);
-    CHECK(custom.position_limit_z_back == 0.05f);
-    CHECK(custom.invert_position_y);
-    CHECK(custom.toggle_key == 0x70 && custom.cycle_mode_key == 0x71 && custom.yaw_mode_key == 0x72);
-    CHECK(custom.data_freshness_ms == 750);
-
-    // Ports below 1024 or above 65535 keep the previous value.
-    WriteFile(path, "[Tracking]\nPort=80\n");
-    Config low;
-    low.Load(path);
-    CHECK(low.port == 4242);
-    WriteFile(path, "[Tracking]\nPort=70000\n");
-    Config high;
-    high.Load(path);
-    CHECK(high.port == 4242);
-
-    // A freshness window of zero or less keeps the previous value.
-    WriteFile(path, "[Advanced]\nDataFreshnessMs=0\n");
-    Config stale;
-    stale.Load(path);
-    CHECK(stale.data_freshness_ms == 500);
-
-    // Smoothing: out of range clamps to the nearest end, non-finite falls back
-    // to that key's own default.
-    WriteFile(path, "[Tracking]\nLocalSmoothing=1.5\nRemoteSmoothing=-0.2\n");
-    Config clamped;
-    clamped.Load(path);
-    CHECK(clamped.local_smoothing == 1.0f);
-    CHECK(clamped.remote_smoothing == 0.0f);
-    WriteFile(path, "[Tracking]\nLocalSmoothing=nan\nRemoteSmoothing=inf\n");
-    Config nonfinite;
-    nonfinite.Load(path);
-    CHECK(nonfinite.local_smoothing == 0.0f);
-    CHECK(nonfinite.remote_smoothing == 0.15f);
-
-    // A decimal comma parsed as a prefix used to read as 0.
-    WriteFile(path, "[Tracking]\nRemoteSmoothing=0,4\n");
-    Config comma;
-    comma.Load(path);
-    CHECK(comma.remote_smoothing == 0.15f);
-
-    // A trailing comment on a number still reads.
-    WriteFile(path, "[Tracking]\nYawSensitivity=1.5 ; boost\n");
-    Config commented;
-    commented.Load(path);
-    CHECK(commented.yaw_sensitivity == 1.5f);
-
-    // Non-finite sensitivities keep the default; negative stays an inversion.
-    WriteFile(path, "[Tracking]\nYawSensitivity=nan\nPitchSensitivity=-2\nRollSensitivity=1e400\n"
-                    "[Position]\nPositionSensitivityX=inf\n");
-    Config sens;
-    sens.Load(path);
-    CHECK(sens.yaw_sensitivity == 1.0f);
-    CHECK(sens.pitch_sensitivity == -2.0f);
-    CHECK(sens.roll_sensitivity == 1.0f);
-    CHECK(sens.position_sensitivity_x == 1.0f);
-
-    // A negative limit would invert the processor's clamp; a non-finite one keeps the default.
-    WriteFile(path, "[Position]\nPositionLimitX=-0.3\nPositionLimitY=nan\nPositionLimitZBack=0.05\n");
-    Config limits;
-    limits.Load(path);
-    CHECK(limits.position_limit_x == 0.0f);
-    CHECK(limits.position_limit_y == 0.20f);
-    CHECK(limits.position_limit_z_back == 0.05f);
-
-    // A key GetAsyncKeyState cannot poll, or a chord modifier, keeps the default.
-    WriteFile(path, "[Hotkeys]\nToggleKey=0x230\nCycleModeKey=0x11\nYawModeKey=0x70\n");
-    Config keys;
-    keys.Load(path);
-    CHECK(keys.toggle_key == 0x23);
-    CHECK(keys.cycle_mode_key == 0x21);
-    CHECK(keys.yaw_mode_key == 0x70);
-
-    // A key name, and a code written in decimal, both used to parse as a prefix
-    // and bind something the player never asked for (0x0E and the digit-5 key).
-    WriteFile(path, "[Hotkeys]\nToggleKey=End\nCycleModeKey=35\nYawModeKey=0x70 ; F1\n");
-    Config key_text;
-    key_text.Load(path);
-    CHECK(key_text.toggle_key == 0x23);
-    CHECK(key_text.cycle_mode_key == 0x21);
-    CHECK(key_text.yaw_mode_key == 0x70);
-
-    // A bool with a trailing comment, or a word the reader does not know, used
-    // to keep the default silently. Recognised spellings still read.
-    WriteFile(path, "[Tracking]\nEnableOnStartup=0 ; off for now\nWorldSpaceYaw=maybe\n"
-                    "[Position]\nPositionEnabled=FALSE\nInvertPositionX=yes\n");
-    Config bools;
-    bools.Load(path);
-    CHECK(!bools.enable_on_startup);
-    CHECK(bools.world_space_yaw);
-    CHECK(!bools.position_enabled);
-    CHECK(bools.invert_position_x);
-
-    // The two vertical limits are independent, so a tighter crouch range is
-    // configurable on its own.
-    WriteFile(path, "[Position]\nPositionLimitY=0.3\nPositionLimitYDown=0.05\n");
-    Config vertical;
-    vertical.Load(path);
-    CHECK(vertical.position_limit_y == 0.30f);
-    CHECK(vertical.position_limit_y_down == 0.05f);
-
-    DeleteFileA(path.c_str());
-    RemoveDirectoryA(dir.c_str());
-}
-
 }  // namespace
 
 int main() {
@@ -705,7 +451,6 @@ int main() {
     TestMenuFov();
     TestClassifyUniform();
     TestHudReticle();
-    TestConfig();
 
     std::printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

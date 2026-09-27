@@ -10,9 +10,13 @@
 
 #include <chrono>
 #include <cstdint>
+#include <stdexcept>
+#include <utility>
 
-#include "cameraunlock/input/chord_hotkeys.h"
+#include "cameraunlock/input/key_binding_registration.h"
+#include "cameraunlock/input/key_bindings.h"
 #include "cameraunlock/logging/file_log.h"
+#include "cameraunlock/tracking/tracking_mode.h"
 
 namespace stormworks_ht {
 
@@ -21,15 +25,6 @@ constexpr float kFirstFrameDeltaSeconds = 1.0f / 60.0f;
 constexpr float kMaxDeltaSeconds = 0.1f;
 constexpr int kHotkeyPollIntervalMs = 16;
 constexpr unsigned long long kHeartbeatIntervalMs = 30000;
-
-std::string NarrowPath(const std::wstring& wide) {
-    int need = WideCharToMultiByte(CP_ACP, 0, wide.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    std::string narrow(need > 0 ? need - 1 : 0, '\0');
-    if (need > 0) {
-        WideCharToMultiByte(CP_ACP, 0, wide.c_str(), -1, &narrow[0], need, nullptr, nullptr);
-    }
-    return narrow;
-}
 
 const char* YawModeName(bool world_space) {
     return world_space ? "world-space (horizon-locked)" : "camera-local";
@@ -43,19 +38,21 @@ const char* TrackingModeName(cameraunlock::TrackingMode mode) {
     }
     return "unknown";
 }
+
+// The table read every list through the hotkey codec, so a list that does not parse here is a
+// bug, not a player's typo.
+void Register(cameraunlock::input::HotkeyPoller& poller, const std::string& list, const char* key,
+              std::function<void()> action) {
+    const cameraunlock::input::KeyBindingsParseResult parsed = cameraunlock::input::ParseKeyBindings(list);
+    if (!parsed.ok()) {
+        throw std::logic_error(std::string("[Hotkeys] ") + key + "=" + list + " does not parse: " + parsed.error);
+    }
+    cameraunlock::input::RegisterKeyBindings(poller, parsed.bindings, std::move(action));
+}
 }  // namespace
 
 void HeadTrackingMod::Init(const std::wstring& exe_dir) {
-    const std::string ini_path = NarrowPath(exe_dir + L"\\StormworksHeadTracking.ini");
-    if (WriteDefaultConfig(ini_path)) {
-        cameraunlock::logging::Line("Wrote default config to %s", ini_path.c_str());
-    }
-    // Both fail on a folder the game cannot write to, or a path with characters
-    // outside the ANSI code page, and the player's edits would be ignored unseen.
-    if (!m_config.Load(ini_path)) {
-        cameraunlock::logging::Line("WARN: could not read or create %s; running on built-in defaults",
-                                    ini_path.c_str());
-    }
+    LoadConfig(exe_dir);
 
     m_enabled.store(m_config.enable_on_startup);
     m_world_space_yaw.store(m_config.world_space_yaw);
@@ -71,32 +68,46 @@ void HeadTrackingMod::Init(const std::wstring& exe_dir) {
         YawModeName(m_world_space_yaw.load()));
 }
 
-void HeadTrackingMod::ConfigurePipeline() {
-    cameraunlock::SensitivitySettings sens;
-    sens.yaw = m_config.yaw_sensitivity;
-    sens.pitch = m_config.pitch_sensitivity;
-    sens.roll = m_config.roll_sensitivity;
-    sens.invert_yaw = m_config.invert_yaw;
-    sens.invert_pitch = m_config.invert_pitch;
-    sens.invert_roll = m_config.invert_roll;
-    m_session.GetProcessor().SetSensitivity(sens);
+// Reads CameraUnlock.ini beside the game's exe, importing StormworksHeadTracking.ini once while
+// it is absent.
+void HeadTrackingMod::LoadConfig(const std::wstring& exe_dir) {
+    cameraunlock::config::ConfigOwnerOptions<Config> options =
+        MakeConfigOwnerOptions(exe_dir + L"\\", cameraunlock::config::DefaultsFile::PerUser());
+    // The mod has no overlay, so the player's one-line messages (an import that did not run,
+    // Defaults.ini that cannot be read, a save that failed) go to the log, the only place they
+    // can be seen.
+    options.status_sink = [](const std::string& message) {
+        cameraunlock::logging::Line("Config: %s", message.c_str());
+    };
+    m_owner = std::make_unique<cameraunlock::config::ConfigOwner<Config>>(std::move(options));
+    const cameraunlock::config::ConfigLoadResult<Config> loaded = m_owner->Load();
+    for (const std::string& line : loaded.log) cameraunlock::logging::Line("Config: %s", line.c_str());
+    cameraunlock::logging::Line("Config: %s %s", kConfigFileName,
+                                cameraunlock::config::ConfigLoadStatusName(loaded.status));
+    m_config = loaded.config;
+    cameraunlock::logging::Line(
+        "Config: port=%u enabled=%d yaw=%s mode=(rotation %d, position %d) freshness=%dms "
+        "smoothing=(local %.2f, remote %.2f) limits=(x %.2f, y %.2f/%.2f, z %.2f/%.2f)",
+        m_config.port, m_config.enable_on_startup ? 1 : 0, YawModeName(m_config.world_space_yaw),
+        m_config.rotation_enabled ? 1 : 0, m_config.position_enabled ? 1 : 0, m_config.data_freshness_ms,
+        m_config.local_smoothing, m_config.remote_smoothing, m_config.position.limit_x,
+        m_config.position.limit_y, m_config.position.limit_y_down, m_config.position.limit_z,
+        m_config.position.limit_z_back);
+}
 
-    cameraunlock::PositionSettings pos;
-    pos.sensitivity_x = m_config.position_sensitivity_x;
-    pos.sensitivity_y = m_config.position_sensitivity_y;
-    pos.sensitivity_z = m_config.position_sensitivity_z;
-    pos.limit_x = m_config.position_limit_x;
-    // The clamp is [-limit_y_down, +limit_y], and the two are configured
-    // separately so a player can hold a tighter budget for ducking than for
-    // standing up.
-    pos.limit_y = m_config.position_limit_y;
-    pos.limit_y_down = m_config.position_limit_y_down;
-    pos.limit_z = m_config.position_limit_z;
-    pos.limit_z_back = m_config.position_limit_z_back;
-    pos.invert_x = m_config.invert_position_x;
-    pos.invert_y = m_config.invert_position_y;
-    pos.invert_z = m_config.invert_position_z;
-    m_session.GetPositionProcessor().SetSettings(pos);
+void HeadTrackingMod::SaveConfig(const char* what, std::function<void(Config&)> change) {
+    const cameraunlock::config::ConfigSaveResult saved = m_owner->Save(std::move(change));
+    for (const std::string& line : saved.log) cameraunlock::logging::Line("Config: %s", line.c_str());
+    if (saved.status != cameraunlock::config::ConfigSaveStatus::Saved) {
+        cameraunlock::logging::Line("Config: %s not saved (%s)", what,
+                                    cameraunlock::config::ConfigSaveStatusName(saved.status));
+    }
+}
+
+void HeadTrackingMod::ConfigurePipeline() {
+    // The limits come from the config; the sensitivities and inversions stay at
+    // PositionSettings' identity, because the tracker shapes the pose.
+    m_session.GetPositionProcessor().SetSettings(m_config.position);
 
     // Smoothing goes in after SetSettings, which would otherwise overwrite it.
     // The session feeds both the rotation and the position processor - there is
@@ -108,9 +119,12 @@ void HeadTrackingMod::ConfigurePipeline() {
     m_session.SetLocalSmoothing(m_config.local_smoothing);
     m_session.SetRemoteSmoothing(m_config.remote_smoothing);
 
-    m_session.SetMode(m_config.position_enabled
-                          ? cameraunlock::TrackingMode::RotationAndPosition
-                          : cameraunlock::TrackingMode::RotationOnly);
+    // The table reads a pair that names no mode as its defaults, so the pair always decodes.
+    const cameraunlock::TrackingMode mode =
+        cameraunlock::DecodeTrackingMode(m_config.rotation_enabled, m_config.position_enabled).value();
+    m_session.SetMode(mode);
+    m_applied_mode.store(static_cast<int>(mode));
+    m_desired_mode.store(static_cast<int>(mode));
 }
 
 void HeadTrackingMod::StartReceiver() {
@@ -127,19 +141,16 @@ void HeadTrackingMod::StartReceiver() {
 }
 
 void HeadTrackingMod::RegisterHotkeys() {
-    using cameraunlock::input::ChordGuarded;
-    using cameraunlock::input::NavGuarded;
-    auto toggle = [this]() { ToggleEnabled(); };
-    auto cycle = [this]() { CycleMode(); };
-    auto yaw_mode = [this]() { ToggleYawMode(); };
-
-    m_hotkeys.AddHotkey(m_config.toggle_key, NavGuarded(toggle));
-    m_hotkeys.AddHotkey(m_config.cycle_mode_key, NavGuarded(cycle));
-    m_hotkeys.AddHotkey(m_config.yaw_mode_key, NavGuarded(yaw_mode));
-    m_hotkeys.AddHotkey('Y', ChordGuarded(toggle));
-    m_hotkeys.AddHotkey('G', ChordGuarded(cycle));
-    m_hotkeys.AddHotkey('H', ChordGuarded(yaw_mode));
+    // A binding without modifiers does not fire while Ctrl and Shift are both
+    // held, so a Ctrl+Shift+<nav> press cannot fire an action through both its
+    // nav key and its chord.
+    Register(m_hotkeys, m_config.toggle_key, "ToggleKey", [this]() { ToggleEnabled(); });
+    Register(m_hotkeys, m_config.cycle_tracking_mode_key, "CycleTrackingModeKey", [this]() { CycleMode(); });
+    Register(m_hotkeys, m_config.yaw_mode_key, "YawModeKey", [this]() { ToggleYawMode(); });
     m_hotkeys.Start(kHotkeyPollIntervalMs);
+    cameraunlock::logging::Line("Hotkeys: toggle=%s, cycle mode=%s, yaw mode=%s",
+                                m_config.toggle_key.c_str(), m_config.cycle_tracking_mode_key.c_str(),
+                                m_config.yaw_mode_key.c_str());
 }
 
 float HeadTrackingMod::ComputeDeltaTime() {
@@ -174,7 +185,7 @@ bool HeadTrackingMod::IsPoseFresh() const {
 
 void HeadTrackingMod::OnFrameTick() {
     float dt = ComputeDeltaTime();
-    ApplyPendingModeCycles();
+    ApplyDesiredMode();
     const bool fresh = IsPoseFresh();
     if (fresh != m_pose_fresh) {
         m_pose_fresh = fresh;
@@ -221,6 +232,7 @@ void HeadTrackingMod::BuildViewDelta(const double* clean_view, double zoom_facto
     BuildHeadDelta(m_pose, m_frame_world_space_yaw, clean_view, zoom_factor, out);
 }
 
+// End changes the session only and never saves.
 void HeadTrackingMod::ToggleEnabled() {
     bool now = !m_enabled.load();
     m_enabled.store(now);
@@ -231,21 +243,32 @@ void HeadTrackingMod::ToggleYawMode() {
     bool now = !m_world_space_yaw.load();
     m_world_space_yaw.store(now);
     cameraunlock::logging::Line("Yaw mode: %s", YawModeName(now));
+    SaveConfig("yaw mode", [now](Config& c) { c.world_space_yaw = now; });
 }
 
+// The next mode is computed from the one the render thread last applied, so two
+// presses inside one frame move one step, and saved here, off the render thread.
 void HeadTrackingMod::CycleMode() {
-    m_pending_mode_cycles.fetch_add(1);
+    const auto next = static_cast<cameraunlock::TrackingMode>((m_applied_mode.load() + 1) % 3);
+    m_desired_mode.store(static_cast<int>(next));
+    const cameraunlock::TrackingModeChannels mode = cameraunlock::EncodeTrackingMode(next);
+    SaveConfig("tracking mode", [mode](Config& c) {
+        c.rotation_enabled = mode.rotation_enabled;
+        c.position_enabled = mode.position_enabled;
+    });
 }
 
 // SetMode resets the position processor's smoothing and the position
 // interpolator, both plain floats the render thread reads and writes inside
-// Update(). Applying the cycle here keeps every write to that state on this
-// thread; the hotkey thread only ever bumps the counter.
-void HeadTrackingMod::ApplyPendingModeCycles() {
-    int pending = m_pending_mode_cycles.exchange(0);
-    while (pending-- > 0) {
-        cameraunlock::logging::Line("Mode: %s", TrackingModeName(m_session.CycleMode()));
-    }
+// Update(). Applying the mode here keeps every write to that state on this
+// thread; the hotkey thread only ever stores the desired mode.
+void HeadTrackingMod::ApplyDesiredMode() {
+    const int desired = m_desired_mode.load();
+    if (desired == m_applied_mode.load()) return;
+    const auto mode = static_cast<cameraunlock::TrackingMode>(desired);
+    m_session.SetMode(mode);
+    m_applied_mode.store(desired);
+    cameraunlock::logging::Line("Mode: %s", TrackingModeName(mode));
 }
 
 }  // namespace stormworks_ht

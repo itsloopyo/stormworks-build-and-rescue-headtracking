@@ -47,18 +47,16 @@ if(MSVC)
     target_compile_options(opengl32 PRIVATE /W4 $<$<CONFIG:Release>:/O2>)
 endif()
 
-# Characterization tests for the matrix maths and the config file. A normal
-# target, so `pixi run build` compiles it and `pixi run test` runs it. It links
-# the core library but no GL, no game and no hooks.
+# Characterization tests for the matrix maths. A normal target, so `pixi run
+# build` compiles it and `pixi run test` runs it. It links the core library but
+# no GL, no game and no hooks.
 add_executable(StormworksHeadTrackingTests
     tests/test_main.cpp
-    ${SRC_DIR}/config.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/legacy_config/legacy_config.cpp
     ${SRC_DIR}/view_rewrite.cpp
     ${SRC_DIR}/camera_uniforms.cpp
     ${SRC_DIR}/hud_reticle.cpp
 )
-target_include_directories(StormworksHeadTrackingTests PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(StormworksHeadTrackingTests PRIVATE ${SRC_DIR})
 target_link_libraries(StormworksHeadTrackingTests PRIVATE cameraunlock ws2_32)
 target_compile_definitions(StormworksHeadTrackingTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
 set_target_properties(StormworksHeadTrackingTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -111,9 +109,28 @@ target_include_directories(StormworksConfigDifferentialTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential)
 target_compile_definitions(StormworksConfigDifferentialTests PRIVATE
     WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS
-    SW_DIFFERENTIAL_DATA="${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/data")
+    SW_DIFFERENTIAL_DATA="${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/data"
+    SW_COMMITTED_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/config/CameraUnlock.ini")
 target_link_libraries(StormworksConfigDifferentialTests PRIVATE cameraunlock sw_config_oracle sw_hotkeys_oracle ws2_32)
 set_target_properties(StormworksConfigDifferentialTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 if(MSVC)
     target_compile_options(StormworksConfigDifferentialTests PRIVATE /W4)
+endif()
+
+# The committed config against the table, a first start, the hotkeys' saves and the legacy file's
+# ANSI path. `--render-config <path>` makes it write the committed file instead
+# (pixi run render-config).
+add_executable(StormworksConfigTests
+    tests/config_tests.cpp
+    ${SRC_DIR}/config.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/legacy_config/legacy_config.cpp
+)
+target_include_directories(StormworksConfigTests PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_definitions(StormworksConfigTests PRIVATE
+    WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS
+    SW_COMMITTED_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/config/CameraUnlock.ini")
+target_link_libraries(StormworksConfigTests PRIVATE cameraunlock ws2_32)
+set_target_properties(StormworksConfigTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+if(MSVC)
+    target_compile_options(StormworksConfigTests PRIVATE /W4)
 endif()

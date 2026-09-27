@@ -7,6 +7,9 @@ platforms = ["win-64"]
 
 [dependencies]
 cmake = ">=3.28"
+# Node runs the migrated-config lint in `test`, render-config's encode-seed.mjs and core's
+# validate-manifest, pinned to the build cameraunlock-core's own lock resolved.
+nodejs = "==26.5.0"
 
 [tasks]
 update-submodule = "git submodule update --remote cameraunlock-core && powershell -NoProfile -ExecutionPolicy Bypass -File cameraunlock-core/scripts/update-submodule.ps1"
@@ -23,10 +26,15 @@ setup = { cmd = """
 build = { cmd = "cmake --build build --config Release", depends-on = ["setup"] }
 build-debug = { cmd = "cmake --build build --config Debug", depends-on = ["setup"] }
 
-# Characterization tests for the camera uniform maths and the config file, and
-# the config differential test. The build task already compiles both, so this
-# checks the differential test's provenance and runs them.
+# Characterization tests for the camera uniform maths, the config tests and the
+# config differential test. The build task already compiles them, so this checks
+# the differential test's provenance, runs them and lints every migrated config.
 test = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-tests.ps1", depends-on = ["build"] }
+
+# Rewrite config/CameraUnlock.ini, the committed copy of the CameraUnlock.ini the mod creates at
+# first launch, from the config table after a change to a row, a comment or a default, then
+# rewrite the per_game of launcher-manifest.json's config descriptor from it.
+render-config = { cmd = "build/tests/Release/StormworksConfigTests.exe --render-config config/CameraUnlock.ini && node cameraunlock-core/scripts/encode-seed.mjs", depends-on = ["build"] }
 
 install = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1", depends-on = ["build"] }
 uninstall = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/uninstall.ps1" }
