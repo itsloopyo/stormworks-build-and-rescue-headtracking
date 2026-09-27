@@ -1,0 +1,41 @@
+# What the config differential test compiles, and where each file came from.
+# scripts/run-tests.ps1 fails when a listed file no longer has its hash.
+#
+# Newest published build: the dev pre-release 0.0.0-nightly.20260916.5516c25 (5516c25), pinned
+# to cameraunlock-core c480d8a. No v* release was published. The build shipped no config file,
+# and its launcher-manifest.json seeded none.
+#
+# Oracle: copies of 'git show dev:src/StormworksHeadTracking/<path>' and of cameraunlock-core
+# 'git show c480d8a:cpp/<path>'. mod_register_hotkeys.inc is lines 129-143 of
+# dev:src/StormworksHeadTracking/mod.cpp, HeadTrackingMod::RegisterHotkeys, verbatim.
+83746ee48dbe43ed0ba40ab069ceae90d2044ee1254d018f06c768a24bbbc4a0  tests/config_differential/oracle/src/config.cpp  dev:src/StormworksHeadTracking/config.cpp
+1d58bc4504137ab0454f71765c1a86f0ef34600ef69cbbad27eb289bd836ea16  tests/config_differential/oracle/src/config.h  dev:src/StormworksHeadTracking/config.h
+a2ea2939725d22b3578b5c9598f1ff3a0087d9f69c45d5d07c0c270cf28c68a4  tests/config_differential/oracle/src/mod_register_hotkeys.inc  dev:src/StormworksHeadTracking/mod.cpp:129-143
+a7ffb44210ff59672fa97e8e5feaa2cb3e81938fcc0334a384c68bc371b3857a  tests/config_differential/oracle/core/include/cameraunlock/config/ini_reader.h  core c480d8a:cpp/include/cameraunlock/config/ini_reader.h
+6d3e3512bdfc9ac2a54bee750c5425191bdb4c24f3ae2ea3b9925612e01c78e5  tests/config_differential/oracle/core/include/cameraunlock/config/value_guards.h  core c480d8a:cpp/include/cameraunlock/config/value_guards.h
+b24dceb8e25475aebc5a468a5c7362a4a4e64204d183d1408525345f32f547f5  tests/config_differential/oracle/core/include/cameraunlock/data/position_settings.h  core c480d8a:cpp/include/cameraunlock/data/position_settings.h
+de519d9b49c949353c550b9dda347380cbbf131f6768378f8a9f5fd97678fea8  tests/config_differential/oracle/core/include/cameraunlock/input/chord_hotkeys.h  core c480d8a:cpp/include/cameraunlock/input/chord_hotkeys.h
+43bdd2ef8554c78e5f440333463750c13b95110fe672b0b6e273244df9e7d169  tests/config_differential/oracle/core/include/cameraunlock/logging/file_log.h  core c480d8a:cpp/include/cameraunlock/logging/file_log.h
+d7a905270933e3cb0c4c361d29d3fd701655498cbcd1875ea79d180468bdbe6a  tests/config_differential/oracle/core/include/cameraunlock/math/angle_utils.h  core c480d8a:cpp/include/cameraunlock/math/angle_utils.h
+c59772d698d54ade3374ee1221b74f5563a86d76f0eb34a989ef7efab389c0ad  tests/config_differential/oracle/core/include/cameraunlock/math/finite_utils.h  core c480d8a:cpp/include/cameraunlock/math/finite_utils.h
+fc2146f8c585e5f610c7234e302f59de4945679cfa28ff479ca47477ec073f22  tests/config_differential/oracle/core/include/cameraunlock/math/smoothing_utils.h  core c480d8a:cpp/include/cameraunlock/math/smoothing_utils.h
+e01515c2656aaf533bae4350dc45b702c3e3d4043935743dcc9bd5ea581fbe1c  tests/config_differential/oracle/core/src/config/ini_reader.cpp  core c480d8a:cpp/src/config/ini_reader.cpp
+a833ff7f2721f7974ce039a3597349a0974e6695ce3e75e598ce5bf4985a14b1  tests/config_differential/oracle/core/src/config/value_guards.cpp  core c480d8a:cpp/src/config/value_guards.cpp
+73c53c2baa06bbfebe8211f62678aa2b60cb95f604743d3686951ba56b87ea47  tests/config_differential/oracle/core/src/logging/file_log.cpp  core c480d8a:cpp/src/logging/file_log.cpp
+#
+# The first-run output of the dev build, extracted once by running the oracle on a missing
+# file (StormworksConfigDifferentialTests --extract-first-run).
+ed1b0aa79d85ba5e6b7fabe37b093816e9a5751fbc5e5c02a83663f26165414b  tests/config_differential/data/dev-first-run.ini  dev first run
+#
+# The frozen import. Never edited once the conversion landed.
+3b4e77e7cc3c0d260b4fdcbd3afb38b109898e88647961be294333f3fc6bb2c7  src/legacy_config/legacy_config.h  frozen import
+2253086ceea1b3395d3284e4fc842e904f5105f3d91829535c64219a156d35af  src/legacy_config/legacy_config.cpp  frozen import
+#
+# The core sources the import compiles. IniReader and the value guards are frozen in core and
+# equal c480d8a's, so the import reads a file with the helpers the dev build had. The default
+# values the dev Config took from core are written out in the frozen import.
+a7ffb44210ff59672fa97e8e5feaa2cb3e81938fcc0334a384c68bc371b3857a  cameraunlock-core/cpp/include/cameraunlock/config/ini_reader.h  core c480d8a:cpp/include/cameraunlock/config/ini_reader.h
+e01515c2656aaf533bae4350dc45b702c3e3d4043935743dcc9bd5ea581fbe1c  cameraunlock-core/cpp/src/config/ini_reader.cpp  core c480d8a:cpp/src/config/ini_reader.cpp
+6d3e3512bdfc9ac2a54bee750c5425191bdb4c24f3ae2ea3b9925612e01c78e5  cameraunlock-core/cpp/include/cameraunlock/config/value_guards.h  core c480d8a:cpp/include/cameraunlock/config/value_guards.h
+a833ff7f2721f7974ce039a3597349a0974e6695ce3e75e598ce5bf4985a14b1  cameraunlock-core/cpp/src/config/value_guards.cpp  core c480d8a:cpp/src/config/value_guards.cpp
+c59772d698d54ade3374ee1221b74f5563a86d76f0eb34a989ef7efab389c0ad  cameraunlock-core/cpp/include/cameraunlock/math/finite_utils.h  core c480d8a:cpp/include/cameraunlock/math/finite_utils.h

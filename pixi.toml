@@ -23,9 +23,10 @@ setup = { cmd = """
 build = { cmd = "cmake --build build --config Release", depends-on = ["setup"] }
 build-debug = { cmd = "cmake --build build --config Debug", depends-on = ["setup"] }
 
-# Characterization tests for the camera uniform maths and the config file. The
-# build task already compiles the test target, so this only has to run it.
-test = { cmd = "build/tests/Release/StormworksHeadTrackingTests.exe", depends-on = ["build"] }
+# Characterization tests for the camera uniform maths and the config file, and
+# the config differential test. The build task already compiles both, so this
+# checks the differential test's provenance and runs them.
+test = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-tests.ps1", depends-on = ["build"] }
 
 install = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1", depends-on = ["build"] }
 uninstall = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/uninstall.ps1" }

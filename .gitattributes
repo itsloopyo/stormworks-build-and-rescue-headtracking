@@ -1,3 +1,6 @@
 * text=auto eol=lf
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# The differential test's inputs are byte-exact, CRLF included.
+tests/config_differential/data/** -text
