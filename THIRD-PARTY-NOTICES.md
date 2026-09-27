@@ -15,7 +15,7 @@ sets out what it does record about the game, and on what basis.
 
 | Component | Version | Licence | How it ships |
 |-----------|---------|---------|--------------|
-| cameraunlock-core | c480d8a8177753966a7d33b857f1db12f5e9fe39 | MIT | Compiled into `opengl32.dll` |
+| cameraunlock-core | 2796d90b6c623b545350fc00c957bf505c4b5fd0 | MIT | Compiled into `opengl32.dll` |
 | MinHook | 1.3.4, with the local change noted below | BSD-2-Clause | Compiled into `opengl32.dll` through cameraunlock-core |
 | Hacker Disassembler Engine 32/64 | as shipped inside MinHook 1.3.4 | BSD-2-Clause | Compiled into `opengl32.dll` as part of MinHook |
 | OpenTrack | n/a | ISC | Not bundled; UDP protocol interoperability only |
@@ -25,7 +25,7 @@ sets out what it does record about the game, and on what basis.
 
 ## cameraunlock-core
 
-- **Version:** commit `c480d8a8177753966a7d33b857f1db12f5e9fe39`
+- **Version:** commit `2796d90b6c623b545350fc00c957bf505c4b5fd0`
 - **License:** MIT
 - **Upstream:** https://github.com/itsloopyo/cameraunlock-core
 - **Usage:** Shared head-tracking runtime (UDP receiver, pose processing, INI config, hotkey polling, logging). Git submodule at `cameraunlock-core/`, statically linked.
