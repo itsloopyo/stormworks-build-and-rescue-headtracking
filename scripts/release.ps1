@@ -17,21 +17,6 @@ Import-Module (Join-Path $projectDir "cameraunlock-core/powershell/ReleaseWorkfl
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
-# Mirrors New-ChangelogFromCommits' insertion so a -Force maintenance entry
-# lands in the same place with the same shape.
-function Add-MaintenanceChangelogEntry {
-    param([string]$Path, [string]$NewVersion)
-    $date = Get-Date -Format 'yyyy-MM-dd'
-    $entry = "## [$NewVersion] - $date`n`n### Changed`n`n- Maintenance release (no user-facing changes).`n`n"
-    $changelog = [System.IO.File]::ReadAllText($Path)
-    if ($changelog -match '(?s)(# Changelog.*?)(## \[)') {
-        $changelog = $changelog -replace '(?s)(# Changelog.*?\n\n)', "`$1$entry"
-    } else {
-        $changelog = $changelog -replace '(?s)(# Changelog.*?\n)', "`$1$entry"
-    }
-    [System.IO.File]::WriteAllText($Path, $changelog.TrimEnd() + "`n", $utf8NoBom)
-}
-
 if ([string]::IsNullOrWhiteSpace($Version)) {
     Write-Error "Usage: pixi run release <major|minor|patch|nightly|X.Y.Z>"
     exit 1
@@ -75,33 +60,12 @@ if (Test-GitTagExists -Tag "v$newVersion") { throw "Tag v$newVersion already exi
 #    so it runs BEFORE any version file is touched - a failure here leaves a
 #    clean tree instead of a half-applied version bump with no tag.
 Write-Host "Generating CHANGELOG..." -ForegroundColor Cyan
-$hasVersionTags = git -C $projectDir tag -l 'v[0-9]*'
-if (-not $hasVersionTags) {
-    # First release. CHANGELOG.md is hand-written and carries its entries under
-    # [Unreleased]; generating from commits would put every commit since the
-    # repo began above that section and leave [Unreleased] in the release. So
-    # promote the heading instead.
-    $changelog = [System.IO.File]::ReadAllText($changelogPath)
-    if ($changelog -match '(?m)^## \[Unreleased\]\s*$') {
-        $date = Get-Date -Format 'yyyy-MM-dd'
-        $changelog = $changelog -replace '(?m)^## \[Unreleased\][ \t]*$', "## [$newVersion] - $date"
-        [System.IO.File]::WriteAllText($changelogPath, $changelog, $utf8NoBom)
-        Write-Host "  Promoted [Unreleased] to [$newVersion]" -ForegroundColor Gray
-    } elseif ($changelog -notmatch [regex]::Escape("## [$newVersion]")) {
-        throw "First release: CHANGELOG.md has neither an [Unreleased] section nor a [$newVersion] section. Write the release notes by hand first."
-    }
-} else {
-    try {
-        New-ChangelogFromCommits -ChangelogPath $changelogPath -Version $newVersion | Out-Null
-    } catch {
-        if (-not $Force) {
-            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host "No user-facing changes to release. Re-run with -Force for a maintenance release." -ForegroundColor Yellow
-            exit 1
-        }
-        Write-Host "No user-facing commits since last tag - writing maintenance entry (-Force)." -ForegroundColor Yellow
-        Add-MaintenanceChangelogEntry -Path $changelogPath -NewVersion $newVersion
-    }
+try {
+    New-ChangelogFromCommits -ChangelogPath $changelogPath -Version $newVersion -Maintenance:$Force | Out-Null
+} catch {
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "No user-facing changes to release. Re-run with -Force for a maintenance release." -ForegroundColor Yellow
+    exit 1
 }
 
 # THIRD-PARTY-NOTICES.md names the cameraunlock-core commit compiled into the
