@@ -29,7 +29,9 @@ build-debug = { cmd = "cmake --build build --config Debug", depends-on = ["setup
 # Characterization tests for the camera uniform maths, the config tests and the
 # config differential test. The build task already compiles them, so this checks
 # the differential test's provenance, runs them and lints every migrated config.
-test = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-tests.ps1", depends-on = ["build"] }
+test-unit = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-tests.ps1 -Suite unit", depends-on = ["build"] }
+test-differential = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-tests.ps1 -Suite differential", depends-on = ["build"] }
+test = { depends-on = ["test-unit", "test-differential"] }
 
 # Rewrite config/CameraUnlock.ini, the committed copy of the CameraUnlock.ini the mod creates at
 # first launch, from the config table after a change to a row, a comment or a default, then
@@ -47,8 +49,9 @@ update-deps = { cmd = """
     powershell -Command "Write-Host 'No vendored dependencies to update (shim-only mod).' -ForegroundColor Yellow"
 """ }
 
-# Through test, so CI and release never package a build whose tests fail.
-package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["test"] }
+# Through test-unit, so CI never packages a build whose tests fail. The config
+# differential runs on the release paths.
+package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["test-unit"] }
 
 # Compare the installed stormworks64.exe's PE fingerprint against the build
 # profiles in src/StormworksHeadTracking/builds/. First thing to run when the

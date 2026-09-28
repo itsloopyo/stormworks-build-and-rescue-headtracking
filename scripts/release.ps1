@@ -56,6 +56,18 @@ if ($branch -ne "main") { throw "Releases must run on 'main' (currently on '$bra
 if (-not (Test-CleanGitStatus)) { throw "Working tree is not clean. Commit or stash first." }
 if (Test-GitTagExists -Tag "v$newVersion") { throw "Tag v$newVersion already exists." }
 
+Write-Host "Running the full test suite..." -ForegroundColor Cyan
+Push-Location $projectDir
+try {
+    pixi run test
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: pixi run test failed. Nothing was changed." -ForegroundColor Red
+        exit 1
+    }
+} finally {
+    Pop-Location
+}
+
 # 3. Changelog. This is the gate that aborts when there is nothing to release,
 #    so it runs BEFORE any version file is touched - a failure here leaves a
 #    clean tree instead of a half-applied version bump with no tag.
